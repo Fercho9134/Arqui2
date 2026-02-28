@@ -29,7 +29,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_PLUGINS_PREINSTALL: grafana-mqtt-datasource,grafana-mongodb-datasource
+      GF_PLUGINS_PREINSTALL: grafana-mqtt-datasource,yesoreyeram-infinity-datasource
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:
@@ -61,6 +61,28 @@ services:
     depends_on:
       mosquitto:
         condition: service_started
+      mongo:
+        condition: service_started
+    networks:
+      - iot_net
+
+  api:
+    build:
+      context: ./api
+    container_name: iot-api
+    restart: unless-stopped
+    environment:
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin}@mongo:27017/?authSource=admin
+      MONGO_DB: iot
+      MONGO_COLLECTION: greenhouse_readings
+      API_HOST: 0.0.0.0
+      API_PORT: 5000
+      MONGO_CONNECT_RETRIES: 30
+      MONGO_CONNECT_DELAY: 2
+      MAX_LIMIT: 5000
+    ports:
+      - "5000:5000"
+    depends_on:
       mongo:
         condition: service_started
     networks:
