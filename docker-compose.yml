@@ -1,0 +1,75 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: iot-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    networks:
+      - iot_net
+
+  mongo:
+    image: mongo:8.0
+    container_name: iot-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - iot_net
+
+  grafana:
+    image: grafana/grafana-enterprise:12.1
+    container_name: iot-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_PLUGINS_PREINSTALL: grafana-mqtt-datasource,grafana-mongodb-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - mosquitto
+      - mongo
+    networks:
+      - iot_net
+
+  consumer:
+    build:
+      context: ./consumer
+    container_name: iot-consumer
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      MQTT_TOPIC: greenhouse/telemetry
+      MQTT_CLIENT_ID: greenhouse-consumer
+      MQTT_USERNAME: ""
+      MQTT_PASSWORD: ""
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin}@mongo:27017/?authSource=admin
+      MONGO_DB: iot
+      MONGO_COLLECTION: greenhouse_readings
+
+      MONGO_CONNECT_RETRIES: 30
+      MONGO_CONNECT_DELAY: 2
+
+      LOG_LEVEL: INFO
+    depends_on:
+      mosquitto:
+        condition: service_started
+      mongo:
+        condition: service_started
+    networks:
+      - iot_net
+
+networks:
+  iot_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  grafana_data:
